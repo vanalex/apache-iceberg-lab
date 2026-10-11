@@ -17,16 +17,14 @@
 set -e
 
 echo "=========================================="
-echo "🔧 Bootstrapping Polaris (Internal Endpoint)"
+echo "🔧 Bootstrapping Polaris"
 echo "=========================================="
 
-# Get OAuth token
-echo "🔐 Getting OAuth token..."
-TOKEN=$(curl -s http://polaris:8181/api/catalog/v1/oauth/tokens \
+# Get OAuth token from Keycloak (Polaris uses external authentication)
+echo "🔐 Getting OAuth token from Keycloak..."
+TOKEN=$(curl -s http://keycloak:8080/realms/iceberg/protocol/openid-connect/token \
   --user ${CLIENT_ID}:${CLIENT_SECRET} \
-  -H "Polaris-Realm: POLARIS" \
-  -d grant_type=client_credentials \
-  -d scope=PRINCIPAL_ROLE:ALL | jq -r .access_token)
+  -d grant_type=client_credentials | jq -r .access_token)
 
 if [ -z "${TOKEN}" ] || [ "${TOKEN}" == "null" ]; then
   echo "❌ Failed to obtain access token"
@@ -81,9 +79,14 @@ echo "  - Catalog: quickstart_catalog"
 echo "  - Storage: MinIO S3"
 echo "  - Endpoint: http://localhost:9000 (clients), http://minio:9000 (Polaris)"
 echo ""
-echo "Credentials:"
-echo "  Client ID: root"
+echo "Credentials (Keycloak client, maps to Polaris principal root):"
+echo "  Token endpoint: http://localhost:8080/realms/iceberg/protocol/openid-connect/token"
+echo "  Client ID: client1"
 echo "  Client Secret: s3cr3t"
+echo ""
+echo "Keycloak Console: http://localhost:8080"
+echo "  Username: admin"
+echo "  Password: admin"
 echo ""
 echo "MinIO Console: http://localhost:9001"
 echo "  Username: admin"

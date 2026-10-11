@@ -9,7 +9,11 @@ ICEBERG_VERSION = os.environ.get("ICEBERG_VERSION", "1.10.0")
 # The Iceberg runtime jar must match the installed Spark minor version; Spark 4 only ships Scala 2.13
 SPARK_MINOR_VERSION = ".".join(pyspark.__version__.split(".")[:2])
 POLARIS_URI = os.environ.get("POLARIS_URI", "http://localhost:8181/api/catalog")
-POLARIS_CREDENTIAL = os.environ.get("POLARIS_CREDENTIAL", "root:s3cr3t")
+# Polaris trusts tokens issued by Keycloak; client1 maps to the Polaris principal root
+OAUTH2_SERVER_URI = os.environ.get(
+    "OAUTH2_SERVER_URI", "http://localhost:8080/realms/iceberg/protocol/openid-connect/token"
+)
+OAUTH2_CREDENTIAL = os.environ.get("OAUTH2_CREDENTIAL", "client1:s3cr3t")
 S3_ENDPOINT = os.environ.get("S3_ENDPOINT", "http://localhost:9000")
 
 
@@ -30,9 +34,10 @@ def get_spark() -> SparkSession:
         .config(f"{catalog}.uri", POLARIS_URI)
         .config(f"{catalog}.warehouse", "quickstart_catalog")
         .config(f"{catalog}.rest.auth.type", "oauth2")
-        .config(f"{catalog}.oauth2-server-uri", f"{POLARIS_URI}/v1/oauth/tokens")
-        .config(f"{catalog}.credential", POLARIS_CREDENTIAL)
-        .config(f"{catalog}.scope", "PRINCIPAL_ROLE:ALL")
+        .config(f"{catalog}.oauth2-server-uri", OAUTH2_SERVER_URI)
+        .config(f"{catalog}.credential", OAUTH2_CREDENTIAL)
+        # Keycloak rejects Iceberg's default "catalog" scope and Polaris' PRINCIPAL_ROLE:ALL
+        .config(f"{catalog}.scope", "openid")
         .config(f"{catalog}.token-refresh-enabled", "true")
         .config(f"{catalog}.io-impl", "org.apache.iceberg.aws.s3.S3FileIO")
         .config(f"{catalog}.s3.endpoint", S3_ENDPOINT)

@@ -60,6 +60,30 @@ services:
       interval: 1s
       timeout: 10s
 
+  # Keycloak - OIDC identity provider for Polaris (https://polaris.apache.org/guides/keycloak/)
+  keycloak:
+    image: quay.io/keycloak/keycloak:26.8.0
+    container_name: keycloak
+    ports:
+      - "8080:8080"
+    environment:
+      KC_BOOTSTRAP_ADMIN_USERNAME: admin
+      KC_BOOTSTRAP_ADMIN_PASSWORD: admin
+      # Tokens always carry iss=http://localhost:8080/realms/iceberg, whether requested from the
+      # host (localhost:8080) or from containers (keycloak:8080), so Polaris accepts both
+      KC_HOSTNAME: http://localhost:8080
+      KC_HOSTNAME_BACKCHANNEL_DYNAMIC: "true"
+    volumes:
+      - ./keycloak/iceberg-realm.json:/opt/keycloak/data/import/iceberg-realm.json:ro
+    command: ["start-dev", "--import-realm", "--health-enabled=true"]
+    networks:
+      - iceberg-net
+    healthcheck:
+      test: "exec 3<>/dev/tcp/localhost/9000 && echo -e 'GET /health/ready HTTP/1.1\\r\\nHost: localhost\\r\\nConnection: close\\r\\n\\r\\n' >&3 && cat <&3 | grep -q '200 OK'"
+      interval: 5s
+      timeout: 2s
+      retries: 30
+
   # Polaris Iceberg REST Catalog (following official Apache guide)
   polaris:
     image: apache/polaris:1.8.0
@@ -77,10 +101,22 @@ services:
       POLARIS_BOOTSTRAP_CREDENTIALS: "POLARIS,root,s3cr3t"
       polaris.realm-context.realms: "POLARIS"
       quarkus.otel.sdk.disabled: "true"
+      # Authenticate with Keycloak-issued tokens only (Polaris' own token endpoint is disabled)
+      polaris.authentication.type: external
+      quarkus.oidc.tenant-enabled: "true"
+      quarkus.oidc.auth-server-url: http://keycloak:8080/realms/iceberg
+      quarkus.oidc.client-id: client1
+      quarkus.oidc.roles.role-claim-path: principal_roles
+      polaris.oidc.principal-mapper.id-claim-path: principal_id
+      polaris.oidc.principal-mapper.name-claim-path: principal_name
+      polaris.oidc.principal-roles-mapper.mappings[0].regex: (.+)
+      polaris.oidc.principal-roles-mapper.mappings[0].replacement: PRINCIPAL_ROLE:$$1
     volumes:
       - ./data/polaris:/var/polaris
     depends_on:
       minio:
+        condition: service_healthy
+      keycloak:
         condition: service_healthy
     networks:
       - iceberg-net
@@ -118,7 +154,8 @@ services:
       polaris:
         condition: service_healthy
     environment:
-      - CLIENT_ID=root
+      # Keycloak client (maps to Polaris principal root)
+      - CLIENT_ID=client1
       - CLIENT_SECRET=s3cr3t
     volumes:
       - ./polaris:/setup
