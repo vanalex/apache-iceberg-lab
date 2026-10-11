@@ -9,3 +9,6 @@ wheels/
 # Virtual environments
 .venv
 .idea
+
+# Local container data (Silo, Polaris)
+/data/

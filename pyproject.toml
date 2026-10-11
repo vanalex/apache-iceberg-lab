@@ -18,6 +18,7 @@ dependencies = [
 
 [project.scripts]
 iceberg-lab = "iceberg_lab:main"
+spark-demo = "iceberg_lab.spark_demo:main"
 
 [build-system]
 requires = ["uv_build>=0.9.5,<0.10.0"]
